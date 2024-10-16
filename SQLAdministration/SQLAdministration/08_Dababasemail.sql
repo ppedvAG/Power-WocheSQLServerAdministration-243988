@@ -36,7 +36,7 @@ GAST hat Recht auf Profil bekommen!!
 
 Nach Einrichten des Profiles:
 
-bis dato: Mails können veschickt werden.. per TSQL gehts
+bis dato: Mails können nicht verschickt werden.. per TSQL gehts
 aber nicht der Agent ;-) kein Auftrag versendet Mails..!
 
 
