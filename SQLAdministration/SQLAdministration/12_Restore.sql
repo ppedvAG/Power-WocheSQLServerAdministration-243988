@@ -1,3 +1,229 @@
+--Unser Kurs---
+
+
+
+--Backup/Restore
+
+
+
+/* Varianten
+
+V ollständige Sicherung
+1. Checkpoint  11:45
+2. Sicherung aller Seiten, Größe der Dateien und Pfade
+ein Zeitpunkt
+
+
+D ifferentielle Sicherung
+sichert alle Blöcke weg in denen sich seit der letzte V Sicherung etwas geändert
+ein Zeitpunkt
+
+
+T ransakt.prot Sicherung
+merkt sich den Weg , wie Daten geändert wurden
+kann auf Sek einen Restore organisieren
+
+ Orig : 100
+ +1
+ *4
+ -10
+ +4
+ -6
+ +123
+ ...
+
+
+!V
+	T
+	T
+	T
+D
+	T
+	T
+	T
+!D
+!	T
+!	T (alle 15min)
+!	T 11:00
+
+Was ist der kürzeste Restore?
+V
+--> mach so oft es geht V Sicherungen
+
+Wie lange dauert der Restore des vorletzten T? in min ca
+dauert so lange, wie die TX im realen Leben dauerten (max 15min)
+
+D verkürzt dramtiksch den Restore
+
+V TTTTTTTTTTTTTTTTTTTTTTTTTDTTT
+
+
+
+
+
+
+
+--RecoveryModel
+
+Einfach
+TX werden nach Commit entfernt. Tlog leert sich automatisch
+--> keine Sicherung des Tlog
+--> wird weniger protokolliert Bulk nur rudimentär
+
+
+Massenprotkolliert
+wie einfach, aber es wird nichts gelöscht
+--> Log muss gesichert werden. 
+--> man kann mit Hilfe des Log restoren
+
+!! Nur die Sicherung des TLog leert das Tlog
+
+
+Vollständig
+wird mehr protokolliert
+--wächst stärker 
+---> man kann auf Sekunde restoren
+
+---ProduktivDB sollten immer Voll (kommt von model)
+
+
+
+/*
+WAS KANN PASSIEREN */ --RecovModel=Full 
+
+1. Fall
+User manipuliert versehentlich Daten (falsch)
+
+Idee: a) Restore der letzten Sicherung vor der Änderung
+      b) Restore der DB  unter anderen Namen 
+
+
+
+
+2. Fall
+DB weist Fehler auf (Integrität verletzt, Fehlerverdächtig)
+ZUgriff nicht mehr möglich
+
+Idee: Restore der Db, Reperatur scheitert
+
+3. Fall
+Server tot inkl HDDs
+
+Idee: Restore auf anderen Server (Pfade, Login)
+
+
+4. Fall
+Server tot aber HDDs leben . Datendateien sind noch vorhanden
+Server tot aber HDDs leben . Nur Datendatei ist vorhanden / Log ist weg
+Server tot aber HDDs leben . Nur Log ist vorhanden / Datendatei ist weg
+
+Idee: kein Restore , sondern Dateien an SQL Prozeß anhängen
+
+
+
+5. Fall
+Wenn ich wüsste , dass gleich was passieren kann...
+
+Idee: keine reguläre Sicherung
+
+*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+--Fall 1
+USE [master]
+RESTORE DATABASE [Northwind1100] FROM  DISK = N'C:\_SQLBACKUP\nw.bak' WITH  FILE = 2,  MOVE N'Northwind' TO N'C:\_SQLDATA\northwnd.mdf',  MOVE N'Northwind_log' TO N'C:\_SQLLDF\northwnd.ldf',  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE DATABASE [Northwind1100] FROM  DISK = N'C:\_SQLBACKUP\nw.bak' WITH  FILE = 10,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind1100] FROM  DISK = N'C:\_SQLBACKUP\nw.bak' WITH  FILE = 11,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind1100] FROM  DISK = N'C:\_SQLBACKUP\nw.bak' WITH  FILE = 12,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind1100] FROM  DISK = N'C:\_SQLBACKUP\nw.bak' WITH  FILE = 13,  NOUNLOAD,  STATS = 5
+
+GO
+
+
+--FALL 3: Restore auf denen Server
+
+--Kopiere das Backup dorthin, wo der SQL Server seine Backup erwartet!
+--auf Server XY
+USE [master]
+RESTORE DATABASE [Northwind] FROM  DISK = N'C:\_SQLBACKUPHR\nw.bak' WITH  FILE = 2,  MOVE N'Northwind' TO N'C:\_SQLDB\northwnd.mdf',  MOVE N'Northwind_log' TO N'C:\_SQLDB\northwnd.ldf',  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE DATABASE [Northwind] FROM  DISK = N'C:\_SQLBACKUPHR\nw.bak' WITH  FILE = 10,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind] FROM  DISK = N'C:\_SQLBACKUPHR\nw.bak' WITH  FILE = 11,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind] FROM  DISK = N'C:\_SQLBACKUPHR\nw.bak' WITH  FILE = 12,  NORECOVERY,  NOUNLOAD,  STATS = 5
+RESTORE LOG [Northwind] FROM  DISK = N'C:\_SQLBACKUPHR\nw.bak' WITH  FILE = 13,  NOUNLOAD,  STATS = 5
+
+GO
+
+
+--Fall 4: Dateien vorhanden 
+USE [master]
+GO
+CREATE DATABASE [Northwind] ON 
+( FILENAME = N'C:\_SQLDB\northwnd.mdf' ),
+( FILENAME = N'C:\_SQLDB\northwnd.ldf' )
+ FOR ATTACH
+GO
+
+--Fall 4 : Logfile fehlt -- Datenverlust 
+USE [master]
+GO
+CREATE DATABASE [Northwind] ON 
+( FILENAME = N'C:\_SQLDB\northwnd.mdf' )
+ FOR ATTACH
+GO
+
+--Fall 4: mdf Datei weg -- Logfile vorhanden--schlecht
+
+
+
+--Fall 1-- restore der DB direkt
+
+--Letztes Back 10:30 T
+--T Sicherung jede Stunde: 11:30
+--Meldung: Problem Daten manipuliert 11:13
+--bitte Db restoren mit geringstmöglichen Datenverlust (11:12)
+
+
+
+--Idee: Restore 10:30--Datenverlust 44min
+
+--Idee: wir warten auf 11:30 und dann resore bis auf 11:12  
+--DV : 18min
+
+
+--Idee: wir sicherung um 11:14 T und dann restore von 11:12
+--DV:  2min
+
+
+--Sind sicherungen online?--> Ja
+--Was wäre, wenn das TLog Backup ca 10min dauern würde
+--Der Verlust ist eigtl größer, weil online Backup online
+--und neue TX (Daten) nicht erfasst..
+
+
+
+
+--besser: ohne DV
+
+
+--Idee: Wir werfen die Leute runter keine neuen Datenänderungen
+--erstaml kein Datenverlust.. weil alle DAten in der DB bzw im Backup
+--
+
+
+--------------------TSQL  aus anderem Kurs.. aber gleiche Fälle
+
 
 
 ---RESTORE
